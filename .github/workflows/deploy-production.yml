@@ -1,0 +1,100 @@
+cat > .github/workflows/deploy-production.yml << 'EOF'
+name: Stage 3 - Deploy to Production
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
+env:
+  RESOURCE_GROUP: sit722-rg
+  AKS_CLUSTER: sit722-staging-aks
+  ACR_NAME: sit722acr95.azurecr.io
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+      
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name ${{ env.AKS_CLUSTER }} \
+            --overwrite-existing
+      
+      - name: Create production namespace
+        run: |
+          kubectl create namespace production --dry-run=client -o yaml | kubectl apply -f -
+      
+      - name: Create ACR image pull secret
+        run: |
+          kubectl create secret docker-registry acr-secret \
+            --docker-server=${{ secrets.ACR_LOGIN_SERVER }} \
+            --docker-username=${{ secrets.ACR_USERNAME }} \
+            --docker-password=${{ secrets.ACR_PASSWORD }} \
+            -n production \
+            --dry-run=client -o yaml | kubectl apply -f -
+      
+      - name: Prepare production manifests
+        run: |
+          mkdir -p /tmp/production-deploy
+          cp k8s/staging/*.yaml /tmp/production-deploy/
+          
+          # Replace placeholders with production values
+          find /tmp/production-deploy -type f -name "*.yaml" -exec sed -i \
+            -e "s|ACR_NAME|${{ env.ACR_NAME }}|g" \
+            -e "s|IMAGE_TAG|latest|g" {} \;
+      
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production namespace..."
+          kubectl apply -f /tmp/production-deploy/ -n production
+      
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/customer-service -n production --timeout=300s
+          kubectl rollout status deployment/order-service -n production --timeout=300s
+          kubectl rollout status deployment/product-service -n production --timeout=300s
+          kubectl rollout status deployment/frontend -n production --timeout=300s
+      
+      - name: Verify deployment
+        run: |
+          echo "=========================================="
+          echo "Production Deployment Summary"
+          echo "=========================================="
+          echo "Deployed from PR: #${{ github.event.pull_request.number }}"
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Deployed by: ${{ github.actor }}"
+          echo ""
+          echo "Deployments:"
+          kubectl get deployments -n production
+          echo ""
+          echo "Pods:"
+          kubectl get pods -n production
+          echo ""
+          echo "Services:"
+          kubectl get services -n production
+          echo "=========================================="
+      
+      - name: Production health check
+        run: |
+          echo "Running production health checks..."
+          sleep 30
+          kubectl get services -n production -o wide
+          echo "Production deployment complete!"
+EOF
