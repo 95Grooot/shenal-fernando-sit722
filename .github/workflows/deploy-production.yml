@@ -96,4 +96,3 @@ jobs:
           sleep 30
           kubectl get services -n production -o wide
           echo "Production deployment complete!"
-EOF
