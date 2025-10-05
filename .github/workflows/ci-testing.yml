@@ -1,0 +1,109 @@
+name: Stage 1 - CI Pipeline with Testing
+
+on:
+  push:
+    branches:
+      - testing
+
+env:
+  ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
+  ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+  ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      # Service 1 Testing
+      - name: Install dependencies for Service 1
+        working-directory: ./services/service1
+        run: npm install
+      
+      - name: Run tests for Service 1
+        working-directory: ./services/service1
+        run: npm test
+        continue-on-error: false
+      
+      # Service 2 Testing
+      - name: Install dependencies for Service 2
+        working-directory: ./services/service2
+        run: npm install
+      
+      - name: Run tests for Service 2
+        working-directory: ./services/service2
+        run: npm test
+        continue-on-error: false
+      
+      # Docker Build and Push (only if tests pass)
+      - name: Login to Azure Container Registry
+        if: success()
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+      
+      - name: Build and push Service 1 image
+        if: success()
+        working-directory: ./services/service1
+        run: |
+          echo "Building Service 1 Docker image..."
+          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/service1:${{ github.sha }} .
+          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/service1:latest .
+          
+          echo "Pushing Service 1 images to ACR..."
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/service1:${{ github.sha }}
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/service1:latest
+          
+          echo "Service 1 images pushed successfully!"
+      
+      - name: Build and push Service 2 image
+        if: success()
+        working-directory: ./services/service2
+        run: |
+          echo "Building Service 2 Docker image..."
+          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/service2:${{ github.sha }} .
+          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/service2:latest .
+          
+          echo "Pushing Service 2 images to ACR..."
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/service2:${{ github.sha }}
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/service2:latest
+          
+          echo "Service 2 images pushed successfully!"
+      
+      - name: Test Results Summary
+        if: always()
+        run: |
+          echo "=========================================="
+          echo "CI Pipeline Execution Summary"
+          echo "=========================================="
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "=========================================="
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ All tests passed!"
+            echo "✅ Docker images built and pushed to ACR"
+          else
+            echo "❌ Pipeline failed - images NOT pushed to ACR"
+          fi
+      
+      - name: Notify on test failure
+        if: failure()
+        run: |
+          echo "=========================================="
+          echo "⚠️  PIPELINE FAILED"
+          echo "=========================================="
+          echo "Tests failed. Docker images will NOT be pushed to ACR."
+          echo "Please fix the failing tests before merging."
+          echo "=========================================="
+          exit 1
