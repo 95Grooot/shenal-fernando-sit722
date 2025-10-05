@@ -1,11 +1,20 @@
 name: Stage 3 - Deploy to Production
-
 on:
   pull_request:
     types:
       - closed
     branches:
       - main
+  workflow_dispatch:  # Add this to enable manual triggering
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
 
 env:
   RESOURCE_GROUP: sit722-rg
@@ -15,7 +24,7 @@ env:
 jobs:
   deploy-production:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.merged == true
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     
     steps:
       - name: Checkout code
