@@ -43,6 +43,15 @@ jobs:
           echo "STAGING_NAMESPACE=$NAMESPACE" >> $GITHUB_ENV
           echo "Creating namespace: $NAMESPACE"
           kubectl create namespace $NAMESPACE || echo "Namespace already exists"
+          
+      - name: Create ACR image pull secret
+        run: |
+          echo "Creating ACR image pull secret..."
+          kubectl create secret docker-registry acr-secret \
+            --docker-server=${{ secrets.ACR_LOGIN_SERVER }} \
+            --docker-username=${{ secrets.ACR_USERNAME }} \
+            --docker-password=${{ secrets.ACR_PASSWORD }} \
+            -n ${{ env.STAGING_NAMESPACE }} || echo "Secret already exists"
       
       - name: Prepare Kubernetes manifests
         run: |

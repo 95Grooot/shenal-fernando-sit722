@@ -12,14 +12,16 @@ spec:
       labels:
         app: customer-service
     spec:
+      imagePullSecrets:
+      - name: acr-secret
       containers:
       - name: customer-service
-        image: ACR_NAME/customer-service:IMAGE_TAG
+        image: ACR_NAME/customer-service:latest
         ports:
         - containerPort: 8000
         env:
         - name: DATABASE_URL
-          value: "postgresql://user:pass@postgres:5432/customerdb"
+          value: "sqlite:///./test.db"
         resources:
           requests:
             memory: "128Mi"
@@ -42,14 +44,16 @@ spec:
       labels:
         app: order-service
     spec:
+      imagePullSecrets:
+      - name: acr-secret
       containers:
       - name: order-service
-        image: ACR_NAME/order-service:IMAGE_TAG
+        image: ACR_NAME/order-service:latest
         ports:
         - containerPort: 8001
         env:
         - name: DATABASE_URL
-          value: "postgresql://user:pass@postgres:5432/orderdb"
+          value: "sqlite:///./test.db"
         resources:
           requests:
             memory: "128Mi"
@@ -72,14 +76,16 @@ spec:
       labels:
         app: product-service
     spec:
+      imagePullSecrets:
+      - name: acr-secret
       containers:
       - name: product-service
-        image: ACR_NAME/product-service:IMAGE_TAG
+        image: ACR_NAME/product-service:latest
         ports:
         - containerPort: 8002
         env:
         - name: DATABASE_URL
-          value: "postgresql://user:pass@postgres:5432/productdb"
+          value: "sqlite:///./test.db"
         resources:
           requests:
             memory: "128Mi"
@@ -102,9 +108,11 @@ spec:
       labels:
         app: frontend
     spec:
+      imagePullSecrets:
+      - name: acr-secret
       containers:
       - name: frontend
-        image: ACR_NAME/frontend:IMAGE_TAG
+        image: ACR_NAME/frontend:latest
         ports:
         - containerPort: 80
         resources:
